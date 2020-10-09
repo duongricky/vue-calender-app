@@ -1,6 +1,8 @@
 <template>
   <v-row class="fill-height">
     <v-col>
+      <h1 class="text-center display-1 py-2">My Calendar</h1>
+      <v-divider></v-divider>
       <v-sheet height="64">
         <v-toolbar
           flat
@@ -12,6 +14,13 @@
             @click="setToday"
           >
             Today
+          </v-btn>
+          <v-btn
+            class="mr-4"
+            color="primary"
+            @click="dialog = true"
+          >
+            New event
           </v-btn>
           <v-btn
             fab
@@ -73,6 +82,23 @@
           </v-menu>
         </v-toolbar>
       </v-sheet>
+      <!-- Add event dialog -->
+      <v-dialog v-model="dialog" max-width="500">
+        <v-card>
+          <v-container fluid>
+            <v-form @submit.prevent="addEvent">
+              <v-text-field v-model="name" type="text" label="Event name (required)"></v-text-field>
+              <v-text-field v-model="details" type="text" label="Detail"></v-text-field>
+              <v-text-field v-model="start" type="date" label="Start time (required)"></v-text-field>
+              <v-text-field v-model="end" type="date" label="End time (required)"></v-text-field>
+              <v-text-field v-model="color" type="color" label="Color (click to open color menu)"></v-text-field>
+              <v-btn type="submit" color="primary" class="mr-4" @click.stop="dialog=false">
+                Create Event
+              </v-btn>
+            </v-form>
+          </v-container>
+        </v-card>
+      </v-dialog>
       <v-sheet height="600">
         <v-calendar
           ref="calendar"
@@ -102,19 +128,28 @@
               dark
             >
               <v-btn icon>
-                <v-icon>mdi-pencil</v-icon>
+                <v-icon @click="deleteEvent(selectedEvent.id)">mdi-delete</v-icon>
               </v-btn>
               <v-toolbar-title v-html="selectedEvent.name"></v-toolbar-title>
               <v-spacer></v-spacer>
-              <v-btn icon>
-                <v-icon>mdi-heart</v-icon>
-              </v-btn>
-              <v-btn icon>
-                <v-icon>mdi-dots-vertical</v-icon>
-              </v-btn>
             </v-toolbar>
             <v-card-text>
-              <span v-html="selectedEvent.details"></span>
+              <form v-if="currentlyEditing !== selectedEvent.id" action="">
+                {{ selectedEvent.details }}
+              </form>
+              <form v-else action="">
+                <v-text-field v-model="selectedEvent.name" type="text"></v-text-field>
+                <v-text-field v-model="selectedEvent.start" type="date"></v-text-field>
+                <v-text-field v-model="selectedEvent.end" type="date"></v-text-field>
+                <v-text-field v-model="selectedEvent.color" type="color"></v-text-field>
+                <v-textarea
+                  v-model="selectedEvent.details"
+                  type="text"
+                  style="width: 100%"
+                  :min-height="100"
+                  placeholder="Add note"
+                ></v-textarea>
+              </form>
             </v-card-text>
             <v-card-actions>
               <v-btn
@@ -123,6 +158,20 @@
                 @click="selectedOpen = false"
               >
                 Cancel
+              </v-btn>
+              <v-btn
+                v-if="currentlyEditing !== selectedEvent.id"
+                text
+                @click.prevent="editEvent(selectedEvent)"
+              >
+                Edit
+              </v-btn>
+              <v-btn
+                v-else
+                text
+                @click.prevent="updateEvent(selectedEvent)"
+              >
+                Save
               </v-btn>
             </v-card-actions>
           </v-card>
@@ -159,21 +208,69 @@
       dialog: false,
     }),
     mounted () {
-			this.$refs.calendar.checkChange()
-			this.getEvents()
+      this.$refs.calendar.checkChange()
+      this.getEvents()
     },
     methods: {
-			async getEvents() {
-				let snapshot = await db.collection('calEvent').get()
-				let events = [];
-				snapshot.forEach(doc => {
-					let appData = doc.data();
-					appData.id = doc.id;
-					events.push(appData)
-				});
-				
-				this.events = events;
-			},
+      async getEvents() {
+        let snapshot = await db.collection('calEvent').get()
+        let events = [];
+        snapshot.forEach(doc => {
+          let appData = doc.data();
+          appData.id = doc.id;
+          events.push(appData)
+        });
+        
+        this.events = events;
+      },
+      async addEvent() {
+        if (this.name && this.start && this.end) {
+          if (this.end < this.start) {
+            alert('Start time must be less than end time');
+          } else {
+            await db.collection('calEvent').add({
+              name: this.name,
+              details: this.details,
+              start: this.start,
+              end: this.end,
+              color: this.color,
+            })
+          }
+          this.getEvents();
+          this.name = ''
+          this.details = ''
+          this.start = ''
+          this.end = ''
+          this.color = ''
+        } else {
+          alert('Name, start and end date are required');
+        }
+      },
+      async deleteEvent(ev) {
+        await db.collection('calEvent')
+        .doc(ev)
+        .delete();
+
+        this.getEvents()
+        this.selectedOpen = false 
+      },
+      async updateEvent(ev) {
+        await db.collection('calEvent')
+          .doc(this.currentlyEditing)
+          .update({
+            details: ev.details,
+            name: ev.name,
+            start: ev.start,
+            end: ev.end,
+            color: ev.color,
+          })
+        
+        this.selectedOpen = false
+        this.currentlyEditing = null
+      },
+      editEvent(ev){
+        this.currentlyEditing = ev.id
+      },
       viewDay ({ date }) {
         this.focus = date
         this.type = 'day'
@@ -240,3 +337,9 @@
     },
   }
 </script>
+
+<style scoped>
+  h1 {
+    color: #f14a4a;
+  }
+</style>
