@@ -133,7 +133,9 @@
 </template>
 
 <script>
-  export default {
+	import { db } from '@/main';
+	
+	export default {
     data: () => ({
       today: new Date().toISOString(),
       focus: new Date().toISOString(),
@@ -157,9 +159,21 @@
       dialog: false,
     }),
     mounted () {
-      this.$refs.calendar.checkChange()
+			this.$refs.calendar.checkChange()
+			this.getEvents()
     },
     methods: {
+			async getEvents() {
+				let snapshot = await db.collection('calEvent').get()
+				let events = [];
+				snapshot.forEach(doc => {
+					let appData = doc.data();
+					appData.id = doc.id;
+					events.push(appData)
+				});
+				
+				this.events = events;
+			},
       viewDay ({ date }) {
         this.focus = date
         this.type = 'day'
